@@ -720,7 +720,10 @@ const CONFIG = {
         }
         
         // 初始化 Supabase 客户端
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        // 创建全局引用，方便函数使用
+        window.supabase = supabaseClient;
         
         let allProjects = [];
         let currentFilter = 'all';
