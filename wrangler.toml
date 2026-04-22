@@ -1,0 +1,13 @@
+# Cloudflare Workers 配置
+name = "project-management-tool"
+main = "_worker.js"
+compatibility_date = "2024-01-01"
+
+# 静态资源
+[site]
+bucket = "."
+
+# 注意：环境变量请在 Cloudflare Dashboard 中设置
+# Settings → Variables → Add variable
+# SUPABASE_URL = https://zwwpwnyxrdgbqdxqbfks.supabase.co
+# SUPABASE_ANON_KEY = your_anon_key
