@@ -1,5 +1,6 @@
-# 敏感配置文件（包含 Supabase Key）
+# 敏感配置文件
 config.js
+.env.local
 
 # 系统文件
 .DS_Store
@@ -18,3 +19,6 @@ Thumbs.db
 
 # 依赖目录
 node_modules/
+
+# 构建输出
+dist/
