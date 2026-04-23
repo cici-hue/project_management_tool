@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from './lib/supabase'
+import * as XLSX from 'xlsx'
 
 function App() {
   const [projects, setProjects] = useState([])
@@ -25,6 +26,8 @@ function App() {
     网址: '',
     版本号: 'V0.1.0'
   })
+
+  const fileInputRef = useRef(null)
 
   const statusOptions = ['规划中', '开发中', '测试中', '已上线']
   const priorityOptions = ['5颗星', '4颗星', '3颗星', '2颗星', '1颗星']
@@ -127,6 +130,96 @@ function App() {
     }
   }
 
+  // 导出 Excel
+  function exportToExcel() {
+    const exportData = projects.map(p => ({
+      '主系统': p.主系统,
+      '模块': p.模块,
+      '子系统': p.子系统,
+      '项目简介': p.项目简介,
+      '主要功能': p.主要功能,
+      '需求方': p.需求方,
+      '负责人': p.负责人,
+      '开发参与人': p.开发参与人,
+      '预计完成时间': p.预计完成时间,
+      '预计第一版测试时间': p.预计第一版测试时间,
+      '优先级': p.优先级,
+      '项目状态': p.项目状态,
+      '目前进度': p.目前进度,
+      '网址': p.网址,
+      '版本号': p.版本号
+    }))
+
+    const ws = XLSX.utils.json_to_sheet(exportData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '项目列表')
+    
+    // 设置列宽
+    const colWidths = [
+      { wch: 15 }, { wch: 12 }, { wch: 20 }, { wch: 30 }, { wch: 30 },
+      { wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 15 }, { wch: 15 },
+      { wch: 10 }, { wch: 10 }, { wch: 30 }, { wch: 25 }, { wch: 12 }
+    ]
+    ws['!cols'] = colWidths
+    
+    XLSX.writeFile(wb, `项目列表_${new Date().toLocaleDateString()}.xlsx`)
+  }
+
+  // 导入 Excel
+  async function importFromExcel(e) {
+    const file = e.target.files[0]
+    if (!file) return
+
+    try {
+      const data = await file.arrayBuffer()
+      const workbook = XLSX.read(data)
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]]
+      const jsonData = XLSX.utils.sheet_to_json(worksheet)
+
+      if (jsonData.length === 0) {
+        alert('Excel 文件为空')
+        return
+      }
+
+      // 确认导入
+      if (!confirm(`确定要导入 ${jsonData.length} 条记录吗？`)) return
+
+      // 转换数据格式
+      const projectsToInsert = jsonData.map(row => ({
+        主系统: row['主系统'] || '',
+        模块: row['模块'] || '',
+        子系统: row['子系统'] || '',
+        项目简介: row['项目简介'] || '',
+        主要功能: row['主要功能'] || '',
+        需求方: row['需求方'] || '',
+        负责人: row['负责人'] || '',
+        开发参与人: row['开发参与人'] || '',
+        预计完成时间: row['预计完成时间'] || '',
+        预计第一版测试时间: row['预计第一版测试时间'] || '',
+        优先级: row['优先级'] || '3颗星',
+        项目状态: row['项目状态'] || '规划中',
+        目前进度: row['目前进度'] || '',
+        网址: row['网址'] || '',
+        版本号: row['版本号'] || 'V0.1.0'
+      }))
+
+      // 批量插入
+      const { error } = await supabase
+        .from('projects')
+        .insert(projectsToInsert)
+
+      if (error) throw error
+
+      alert(`成功导入 ${projectsToInsert.length} 条记录`)
+      loadProjects()
+    } catch (err) {
+      alert('导入失败: ' + err.message)
+    }
+
+    // 清空文件输入
+    e.target.value = ''
+  }
+
   function getStatusColor(status) {
     const colors = {
       '规划中': '#faad14',
@@ -172,7 +265,22 @@ function App() {
     <div className="container">
       <header className="header">
         <h1>项目管理系统</h1>
-        <button className="btn-primary" onClick={openAddModal}>+ 新增项目</button>
+        <div className="header-actions">
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".xlsx,.xls"
+            onChange={importFromExcel}
+            style={{ display: 'none' }}
+          />
+          <button className="btn-secondary" onClick={() => fileInputRef.current?.click()}>
+            📥 导入 Excel
+          </button>
+          <button className="btn-secondary" onClick={exportToExcel}>
+            📤 导出 Excel
+          </button>
+          <button className="btn-primary" onClick={openAddModal}>+ 新增项目</button>
+        </div>
       </header>
 
       <div className="stats">
@@ -216,62 +324,68 @@ function App() {
         ))}
       </div>
 
-      <div className="table-container">
-        <table className="project-table">
-          <thead>
-            <tr>
-              <th>主系统</th>
-              <th>模块</th>
-              <th>子系统</th>
-              <th>项目简介</th>
-              <th>需求方</th>
-              <th>负责人</th>
-              <th>开发参与人</th>
-              <th>预计完成</th>
-              <th>优先级</th>
-              <th>状态</th>
-              <th>目前进度</th>
-              <th>网址</th>
-              <th>版本号</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredProjects.map(project => (
-              <tr key={project.id}>
-                <td>{project.主系统}</td>
-                <td>{project.模块}</td>
-                <td>{project.子系统}</td>
-                <td title={project.项目简介}>{project.项目简介}</td>
-                <td>{project.需求方}</td>
-                <td>{project.负责人}</td>
-                <td>{project.开发参与人}</td>
-                <td>{project.预计完成时间}</td>
-                <td>
-                  <span className="priority-badge" style={{ backgroundColor: getPriorityColor(project.优先级) }}>
-                    {project.优先级}
-                  </span>
-                </td>
-                <td>
-                  <span className="status-badge" style={{ backgroundColor: getStatusColor(project.项目状态) }}>
-                    {project.项目状态}
-                  </span>
-                </td>
-                <td title={project.目前进度}>{project.目前进度}</td>
-                <td>
-                  {project.网址 ? (
-                    <a href={project.网址} target="_blank" rel="noopener noreferrer">访问</a>
-                  ) : '-'}
-                </td>
-                <td>{project.版本号}</td>
-                <td>
-                  <button className="btn-edit" onClick={() => openEditModal(project)}>编辑</button>
-                  <button className="btn-delete" onClick={() => handleDelete(project.id)}>删除</button>
-                </td>
+      <div className="table-wrapper">
+        <div className="table-container">
+          <table className="project-table">
+            <thead>
+              <tr>
+                <th>主系统</th>
+                <th>模块</th>
+                <th>子系统</th>
+                <th>项目简介</th>
+                <th>主要功能</th>
+                <th>需求方</th>
+                <th>负责人</th>
+                <th>开发参与人</th>
+                <th>预计完成</th>
+                <th>预计测试</th>
+                <th>优先级</th>
+                <th>状态</th>
+                <th>目前进度</th>
+                <th>网址</th>
+                <th>版本号</th>
+                <th>操作</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredProjects.map(project => (
+                <tr key={project.id}>
+                  <td>{project.主系统}</td>
+                  <td>{project.模块}</td>
+                  <td>{project.子系统}</td>
+                  <td className="wrap-text">{project.项目简介}</td>
+                  <td className="wrap-text">{project.主要功能}</td>
+                  <td>{project.需求方}</td>
+                  <td>{project.负责人}</td>
+                  <td>{project.开发参与人}</td>
+                  <td>{project.预计完成时间}</td>
+                  <td>{project.预计第一版测试时间}</td>
+                  <td>
+                    <span className="priority-badge" style={{ backgroundColor: getPriorityColor(project.优先级) }}>
+                      {project.优先级}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="status-badge" style={{ backgroundColor: getStatusColor(project.项目状态) }}>
+                      {project.项目状态}
+                    </span>
+                  </td>
+                  <td className="wrap-text">{project.目前进度}</td>
+                  <td>
+                    {project.网址 ? (
+                      <a href={project.网址} target="_blank" rel="noopener noreferrer">访问</a>
+                    ) : '-'}
+                  </td>
+                  <td>{project.版本号}</td>
+                  <td className="action-btns">
+                    <button className="btn-edit" onClick={() => openEditModal(project)}>编辑</button>
+                    <button className="btn-delete" onClick={() => handleDelete(project.id)}>删除</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {showModal && (
